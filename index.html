@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>產險客戶資料與到期提醒管理系統</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '"Noto Sans TC"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- 頂部導覽列 -->
+  <header class="bg-gradient-to-r from-brand-800 via-brand-700 to-brand-600 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center text-xl shadow-inner">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight leading-tight">產險客戶資料管理系統</h1>
+          <p class="text-xs text-blue-100 hidden sm:block">到期自動提醒・LINE 續保通知・Google 雲端同步</p>
+        </div>
+      </div>
+
+      <!-- 頂部操作按鈕群 -->
+      <div class="flex items-center gap-2 sm:gap-2.5">
+        <button onclick="openCloudModal()" class="px-3 py-2.5 sm:px-4 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 transition text-sm font-medium flex items-center gap-2 border border-white/20 shadow-sm">
+          <i class="fa-brands fa-google-drive text-base text-emerald-300"></i>
+          <span>雲端同步 / 備份</span>
+          <span id="cloudStatusDot" class="w-2 h-2 rounded-full bg-amber-400" title="尚未設定 Google Apps Script URL"></span>
+        </button>
+
+        <button onclick="openCustomerModal()" class="px-4 py-2.5 rounded-xl bg-white text-brand-700 hover:bg-blue-50 active:scale-95 transition text-sm font-bold flex items-center gap-2 shadow-md">
+          <i class="fa-solid fa-plus"></i>
+          <span>新增客戶</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主內容區塊 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- 1. 到期提醒儀表板 (4張統計卡片，可點擊快速篩選) -->
+    <section aria-label="到期統計儀表板" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <!-- 總客戶數 -->
+      <button onclick="setStatusFilter('ALL')" id="card-ALL" class="stat-card text-left bg-white rounded-2xl p-4 sm:p-5 border-2 border-brand-500 shadow-sm hover:shadow-md transition flex items-center justify-between">
+        <div>
+          <p class="text-xs sm:text-sm font-medium text-slate-500">總客戶保單數</p>
+          <p id="statTotal" class="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">0</p>
+        </div>
+        <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-50 text-brand-600 flex items-center justify-center text-lg sm:text-xl">
+          <i class="fa-solid fa-users"></i>
+        </div>
+      </button>
+
+      <!-- 已過期 -->
+      <button onclick="setStatusFilter('EXPIRED')" id="card-EXPIRED" class="stat-card text-left bg-white rounded-2xl p-4 sm:p-5 border-2 border-transparent hover:border-red-300 shadow-sm hover:shadow-md transition flex items-center justify-between">
+        <div>
+          <p class="text-xs sm:text-sm font-medium text-red-600 flex items-center gap-1">
+            <span>已過期</span>
+            <span class="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+          </p>
+          <p id="statExpired" class="text-2xl sm:text-3xl font-bold text-red-600 mt-1">0</p>
+        </div>
+        <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-lg sm:text-xl">
+          <i class="fa-solid fa-circle-exclamation"></i>
+        </div>
+      </button>
+
+      <!-- 30天內即將到期 -->
+      <button onclick="setStatusFilter('URGENT30')" id="card-URGENT30" class="stat-card text-left bg-white rounded-2xl p-4 sm:p-5 border-2 border-transparent hover:border-orange-300 shadow-sm hover:shadow-md transition flex items-center justify-between">
+        <div>
+          <p class="text-xs sm:text-sm font-medium text-orange-600">30天內到期</p>
+          <p id="statUrgent30" class="text-2xl sm:text-3xl font-bold text-orange-600 mt-1">0</p>
+        </div>
+        <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center text-lg sm:text-xl">
+          <i class="fa-solid fa-bell"></i>
+        </div>
+      </button>
+
+      <!-- 60天內到期 -->
+      <button onclick="setStatusFilter('SOON60')" id="card-SOON60" class="stat-card text-left bg-white rounded-2xl p-4 sm:p-5 border-2 border-transparent hover:border-amber-300 shadow-sm hover:shadow-md transition flex items-center justify-between">
+        <div>
+          <p class="text-xs sm:text-sm font-medium text-amber-600">31~60天內到期</p>
+          <p id="statSoon60" class="text-2xl sm:text-3xl font-bold text-amber-600 mt-1">0</p>
+        </div>
+        <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg sm:text-xl">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+      </button>
+    </section>
+
+    <!-- 2. 搜尋與篩選工具列 -->
+    <section class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+        <!-- 關鍵字搜尋 -->
+        <div class="md:col-span-5 relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          <input
+            type="text"
+            id="searchInput"
+            oninput="renderCustomers()"
+            placeholder="搜尋姓名、車號 (如 ABC-1234)、身分證/統編、電話..."
+            class="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition"
+          />
+          <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- 產險公司篩選 -->
+        <div class="md:col-span-3">
+          <select id="companyFilter" onchange="renderCustomers()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm bg-white">
+            <option value="ALL">所有產險公司</option>
+          </select>
+        </div>
+
+        <!-- 到期狀態篩選 -->
+        <div class="md:col-span-4 flex gap-2">
+          <select id="statusFilter" onchange="syncCardHighlight(); renderCustomers()" class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm bg-white">
+            <option value="ALL">所有到期狀態 (依到期日近→遠)</option>
+            <option value="EXPIRED">🔴 已過期</option>
+            <option value="URGENT30">🟠 30天內即將到期</option>
+            <option value="SOON60">🟡 31~60天內到期</option>
+            <option value="SAFE">🟢 60天以上 (正常保障中)</option>
+          </select>
+
+          <button onclick="resetFilters()" title="重設篩選" class="px-3.5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-600 text-sm transition">
+            <i class="fa-solid fa-rotate-left"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 快捷資訊列 & 手機/桌面檢視切換 -->
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs sm:text-sm text-slate-500">
+        <div class="flex items-center gap-2">
+          <span>顯示 <strong id="filteredCount" class="text-slate-800">0</strong> 筆資料（已依到期日由近到遠排序）</span>
+          <span id="lastSyncInfo" class="hidden sm:inline-block text-xs text-slate-400"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="loadDemoData()" class="text-brand-600 hover:text-brand-800 font-medium underline underline-offset-2 text-xs">
+            載入範例客戶資料
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 客戶資料清單 (桌面版表格 + 手機版卡片自適應) -->
+    <section id="customerListSection">
+      <!-- 空資料提示 -->
+      <div id="emptyState" class="hidden bg-white rounded-2xl p-10 text-center border border-slate-200 shadow-sm">
+        <div class="w-16 h-16 rounded-full bg-blue-50 text-brand-500 flex items-center justify-center text-2xl mx-auto mb-4">
+          <i class="fa-regular fa-folder-open"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-800">目前沒有符合條件的客戶資料</h3>
+        <p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">點擊右上角「新增客戶」建立第一筆保單紀錄，或從「雲端同步 / 備份」匯入既有資料。</p>
+        <div class="mt-5 flex flex-wrap justify-center gap-3">
+          <button onclick="openCustomerModal()" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold shadow-sm">
+            <i class="fa-solid fa-plus mr-1.5"></i>新增客戶資料
+          </button>
+          <button onclick="loadDemoData()" class="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium">
+            載入測試範例
+          </button>
+        </div>
+      </div>
+
+      <!-- 桌面版表格檢視 (md 以上顯示) -->
+      <div id="desktopTableContainer" class="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                <th class="py-3.5 px-4">到期狀態</th>
+                <th class="py-3.5 px-4">客戶姓名 / 證號</th>
+                <th class="py-3.5 px-4">車牌號碼</th>
+                <th class="py-3.5 px-4">產險公司</th>
+                <th class="py-3.5 px-4">保險期間 (起 ~ 迄)</th>
+                <th class="py-3.5 px-4">聯絡電話 / 備註</th>
+                <th class="py-3.5 px-4 text-right">快速操作</th>
+              </tr>
+            </thead>
+            <tbody id="desktopTableBody" class="divide-y divide-slate-100 text-sm">
+              <!-- JS 動態渲染 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 手機版卡片檢視 (md 以下顯示，按鈕加大好點擊) -->
+      <div id="mobileCardContainer" class="md:hidden space-y-3.5">
+        <!-- JS 動態渲染 -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 頁尾 -->
+  <footer class="bg-white border-t border-slate-200 py-4 px-4 text-center text-xs text-slate-500 mt-10">
+    <p>產險客戶資料管理系統・資料預設自動儲存於本機瀏覽器，建議定期透過「雲端同步 / 備份」同步至 Google 雲端。</p>
+  </footer>
+
+  <!-- ========================================== -->
+  <!-- Modal 1: 新增 / 編輯客戶資料視窗             -->
+  <!-- ========================================== -->
+  <div id="customerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden my-auto animate-fadeIn">
+      <div class="px-5 py-4 bg-brand-700 text-white flex items-center justify-between">
+        <h2 id="modalTitle" class="text-lg font-bold flex items-center gap-2">
+          <i class="fa-solid fa-user-plus"></i>
+          <span>新增客戶保單資料</span>
+        </h2>
+        <button onclick="closeCustomerModal()" class="w-8 h-8 rounded-lg hover:bg-white/20 flex items-center justify-center transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="customerForm" onsubmit="saveCustomer(event)" class="p-5 sm:p-6 space-y-4 max-h-[82vh] overflow-y-auto">
+        <input type="hidden" id="customerId" />
+
+        <!-- 第一列：客戶姓名 & 身分證字號/統一編號 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">客戶姓名 <span class="text-red-500">*</span></label>
+            <input type="text" id="fieldName" required placeholder="例如：王大明 或 宏達物流有限公司" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">身分證字號 / 統一編號 <span class="text-red-500">*</span></label>
+            <input type="text" id="fieldIdNumber" required placeholder="例如：A123456789 或 12345678" oninput="this.value = this.value.toUpperCase()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm uppercase font-mono" />
+          </div>
+        </div>
+
+        <!-- 第二列：車牌號碼 & 聯絡電話 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">車牌號碼 <span class="text-red-500">*</span></label>
+            <input type="text" id="fieldPlate" required placeholder="例如：ABC-1234" oninput="this.value = this.value.toUpperCase()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm uppercase font-mono font-semibold" />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">聯絡電話</label>
+            <input type="tel" id="fieldPhone" placeholder="例如：0912-345-678" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm" />
+          </div>
+        </div>
+
+        <!-- 第三列：產險公司 (含自訂新增功能) -->
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">產險公司 <span class="text-red-500">*</span></label>
+          <div class="flex gap-2">
+            <select id="fieldCompany" required class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm bg-white">
+              <!-- JS 動態填入產險公司選項 -->
+            </select>
+            <button type="button" onclick="toggleCustomCompanyInput()" class="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium whitespace-nowrap flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-plus"></i>
+              <span>自訂公司</span>
+            </button>
+          </div>
+          <!-- 自訂產險公司展開區 -->
+          <div id="customCompanyBox" class="hidden mt-2 p-3 bg-blue-50/80 rounded-xl border border-blue-200 flex gap-2">
+            <input type="text" id="newCompanyInput" placeholder="輸入新產險公司名稱 (如：新光產險)" class="flex-1 px-3 py-2 rounded-lg border border-blue-300 text-sm bg-white outline-none" />
+            <button type="button" onclick="addCustomCompany()" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold">
+              加入選單
+            </button>
+          </div>
+        </div>
+
+        <!-- 第四列：保險起始日 & 保險到期日 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">保險起始日 <span class="text-red-500">*</span></label>
+            <input type="date" id="fieldStartDate" required onchange="autoSetEndDate()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm bg-white" />
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-sm font-semibold text-slate-700">保險到期日 <span class="text-red-500">*</span></label>
+              <button type="button" onclick="setOneYearFromStart()" class="text-xs text-brand-600 hover:underline font-medium">+1年自動帶入</button>
+            </div>
+            <input type="date" id="fieldEndDate" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm bg-white" />
+          </div>
+        </div>
+
+        <!-- 第五列：備註 -->
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">備註事項（險種、保費、車型、特殊約定等）</label>
+          <textarea id="fieldNotes" rows="2" placeholder="例如：強制險 + 第三人責任險 + 超額 1000萬，去年保費 $8,450" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm"></textarea>
+        </div>
+
+        <!-- 表單送出按鈕 -->
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+          <button type="button" onclick="closeCustomerModal()" class="px-5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-sm font-medium transition">
+            取消
+          </button>
+          <button type="submit" class="px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-md transition flex items-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>儲存客戶資料</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- Modal 2: Google 雲端同步與備份還原視窗        -->
+  <!-- ========================================== -->
+  <div id="cloudModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden my-auto">
+      <div class="px-5 py-4 bg-slate-800 text-white flex items-center justify-between">
+        <h2 class="text-lg font-bold flex items-center gap-2">
+          <i class="fa-brands fa-google-drive text-emerald-400"></i>
+          <span>Google 雲端同步與資料備份中心</span>
+        </h2>
+        <button onclick="closeCloudModal()" class="w-8 h-8 rounded-lg hover:bg-white/20 flex items-center justify-center transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- 分頁切換標籤 -->
+      <div class="flex border-b border-slate-200 bg-slate-50 px-4 pt-3 gap-2">
+        <button id="tabBtnGas" onclick="switchCloudTab('gas')" class="px-4 py-2.5 rounded-t-xl text-sm font-bold bg-white text-brand-700 border-t border-x border-slate-200 -mb-px">
+          <i class="fa-solid fa-cloud-arrow-up mr-1.5"></i>方式一：Google 試算表/雲端自動雙向同步
+        </button>
+        <button id="tabBtnFile" onclick="switchCloudTab('file')" class="px-4 py-2.5 rounded-t-xl text-sm font-medium text-slate-600 hover:text-slate-900">
+          <i class="fa-solid fa-file-csv mr-1.5"></i>方式二：匯出 Excel CSV / JSON 手動備份
+        </button>
+      </div>
+
+      <div class="p-5 sm:p-6 max-h-[78vh] overflow-y-auto space-y-5">
+        <!-- 分頁 1: Google Apps Script 雙向同步 -->
+        <div id="tabContentGas" class="space-y-5">
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900 space-y-1.5">
+            <p class="font-bold flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-info text-brand-600"></i>
+              <span>如何連結您的私人 Google 試算表與雲端硬碟？</span>
+            </p>
+            <p class="text-xs sm:text-sm text-blue-800 leading-relaxed">
+              透過免費的 <strong>Google Apps Script (GAS)</strong>，您可以將資料直接同步儲存在您自己的 Google 試算表中，換手機或電腦只要貼上網址就能一鍵還原！
+            </p>
+          </div>
+
+          <!-- GAS URL 輸入與立即同步按鈕 -->
+          <div class="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <label class="block text-sm font-bold text-slate-800">您的 Google Apps Script 網頁應用程式網址 (Web App URL)：</label>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <input type="url" id="gasUrlInput" placeholder="https://script.google.com/macros/s/xxxxxx/exec" class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 outline-none text-sm font-mono bg-white" />
+              <button onclick="saveGasUrl()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold whitespace-nowrap">
+                儲存網址
+              </button>
+            </div>
+
+            <!-- 雙向同步操作按鈕 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button onclick="syncUploadToGoogle()" id="btnUploadGas" class="py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-cloud-arrow-up text-base"></i>
+                <span>上傳備份至 Google 雲端</span>
+              </button>
+              <button onclick="syncDownloadFromGoogle()" id="btnDownloadGas" class="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-cloud-arrow-down text-base"></i>
+                <span>從 Google 雲端下載還原</span>
+              </button>
+            </div>
+            <p id="gasSyncStatusText" class="text-xs text-slate-500 text-center"></p>
+          </div>
+
+          <!-- 步驟教學折疊/展開區 -->
+          <div class="border border-slate-200 rounded-xl overflow-hidden">
+            <div class="bg-slate-100 px-4 py-3 flex items-center justify-between">
+              <span class="text-sm font-bold text-slate-800">📋 3 分鐘設定教學與 Apps Script 程式碼</span>
+              <button onclick="copyGasScript()" class="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs">
+                <i class="fa-regular fa-copy"></i>
+                <span>一鍵複製 GAS 程式碼</span>
+              </button>
+            </div>
+            <div class="p-4 space-y-3 text-xs sm:text-sm text-slate-700">
+              <ol class="list-decimal list-inside space-y-1.5 leading-relaxed">
+                <li>前往您的 <strong>Google 雲端硬碟</strong>，新增一個空白的「<strong>Google 試算表</strong>」（可命名為：產險客戶資料庫）。</li>
+                <li>在試算表上方選單點擊「<strong>擴充功能</strong>」→「<strong>Apps Script</strong>」。</li>
+                <li>刪除編輯器內原有程式碼，貼上以下程式碼並按 <kbd class="px-1.5 py-0.5 bg-slate-200 rounded">Ctrl+S</kbd> 儲存。</li>
+                <li>點擊右上角「<strong>部署</strong>」→「<strong>新增部署作業</strong>」，類型選「<strong>網頁應用程式</strong>」。</li>
+                <li>執行身分選「<strong>我</strong>」，誰可以存取選「<strong>所有人</strong>」，點擊部署並授權後，複製產生的 <strong>網頁應用程式網址</strong> 貼到上方欄位即可！</li>
+              </ol>
+
+              <pre id="gasCodeBlock" class="bg-slate-900 text-emerald-300 p-3.5 rounded-xl text-xs overflow-x-auto font-mono leading-relaxed select-all">function doGet(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getRange("A1").getValue();
+  if (!data) {
+    data = JSON.stringify({ customers: [], companies: [] });
+  }
+  return ContentService.createTextOutput(data)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var jsonStr = e.postData.contents;
+    var parsed = JSON.parse(jsonStr);
+    
+    // 1. 將完整 JSON 備份於 A1 儲存格供系統精準還原
+    sheet.getRange("A1").setValue(jsonStr);
+    sheet.getRange("B1").setValue("最後同步時間：" + new Date().toLocaleString("zh-TW"));
+    
+    // 2. 同時在下方產生可讀的客戶明細表方便直接瀏覽
+    if (sheet.getLastRow() > 2) {
+      sheet.getRange(3, 1, sheet.getLastRow() - 2, 8).clearContent();
+    }
+    var headers = [["客戶姓名", "身分證/統編", "車牌號碼", "產險公司", "保險起始日", "保險到期日", "聯絡電話", "備註"]];
+    sheet.getRange(3, 1, 1, 8).setValues(headers).setFontWeight("bold");
+    
+    if (parsed.customers && parsed.customers.length > 0) {
+      var rows = parsed.customers.map(function(c) {
+        return [c.name, c.idNumber, c.plate, c.company, c.startDate, c.endDate, c.phone || "", c.notes || ""];
+      });
+      sheet.getRange(4, 1, rows.length, 8).setValues(rows);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", count: parsed.customers.length }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分頁 2: 本機檔案匯出與匯入 -->
+        <div id="tabContentFile" class="hidden space-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- 匯出 CSV (Excel 相容) -->
+            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+              <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg">
+                <i class="fa-solid fa-file-excel"></i>
+              </div>
+              <h3 class="font-bold text-slate-800">匯出 Excel CSV 報表</h3>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                產生 UTF-8 BOM 格式的 CSV 檔案，可用 Excel 直接開啟不亂碼，或上傳至 Google 雲端硬碟保存。
+              </p>
+              <button onclick="exportCSV()" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-xs transition">
+                <i class="fa-solid fa-download mr-1.5"></i>下載 CSV 檔案
+              </button>
+            </div>
+
+            <!-- 匯出 JSON 完整備份 -->
+            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+              <div class="w-10 h-10 rounded-xl bg-blue-100 text-brand-700 flex items-center justify-center text-lg">
+                <i class="fa-solid fa-file-code"></i>
+              </div>
+              <h3 class="font-bold text-slate-800">匯出 JSON 完整系統備份</h3>
+              <p class="text-xs text-slate-600 leading-relaxed">
+                包含所有客戶資料與自訂產險公司設定，適合用於跨裝置移轉與完整資料還原。
+              </p>
+              <button onclick="exportJSON()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-xs transition">
+                <i class="fa-solid fa-download mr-1.5"></i>下載 JSON 備份檔
+              </button>
+            </div>
+          </div>
+
+          <!-- 匯入還原區 -->
+          <div class="p-5 rounded-xl border-2 border-dashed border-slate-300 bg-white text-center space-y-3">
+            <div class="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xl mx-auto">
+              <i class="fa-solid fa-file-import"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-slate-800">從備份檔案匯入還原 (支援 JSON 或 CSV)</h3>
+              <p class="text-xs text-slate-500 mt-1">請選擇先前匯出的 .json 備份檔或 .csv 檔案進行匯入</p>
+            </div>
+            <input type="file" id="importFileInput" accept=".json,.csv" onchange="handleFileImport(event)" class="hidden" />
+            <button onclick="document.getElementById('importFileInput').click()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold transition">
+              <i class="fa-solid fa-folder-open mr-1.5"></i>選擇檔案並匯入
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- Modal 3: 自訂確認對話框 (取代 confirm())      -->
+  <!-- ========================================== -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+      <div class="flex items-center gap-3">
+        <div id="confirmIconBox" class="w-11 h-11 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+          <h3 id="confirmTitle" class="text-lg font-bold text-slate-800">確認操作</h3>
+          <p id="confirmMessage" class="text-sm text-slate-600 mt-0.5">確定要執行此操作嗎？</p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2.5 pt-2">
+        <button onclick="closeConfirmModal()" class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-sm font-medium">
+          取消
+        </button>
+        <button id="confirmActionBtn" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-xs">
+          確定執行
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- Toast 訊息通知提示框 (取代 alert())          -->
+  <!-- ========================================== -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-[calc(100%-2.5rem)] pointer-events-none"></div>
+
+  <!-- ========================================== -->
+  <!-- JavaScript 核心邏輯                        -->
+  <!-- ========================================== -->
+  <script>
+    // 預設產險公司清單
+    const DEFAULT_COMPANIES = [
+      '富邦產險',
+      '國泰產險',
+      '新安東京海上',
+      '明台產險',
+      '和泰產險',
+      '泰安產險',
+      '華南產險'
+    ];
+
+    // LocalStorage 儲存鍵值
+    const STORAGE_KEYS = {
+      CUSTOMERS: 'insure_crm_customers_v1',
+      COMPANIES: 'insure_crm_companies_v1',
+      GAS_URL: 'insure_crm_gas_url_v1',
+      LAST_SYNC: 'insure_crm_last_sync_v1'
+    };
+
+    // 全域狀態
+    let customers = [];
+    let companies = [...DEFAULT_COMPANIES];
+    let currentConfirmCallback = null;
+
+    // 初始化應用程式
+    window.addEventListener('DOMContentLoaded', () => {
+      loadFromLocalStorage();
+      populateCompanyDropdowns();
+      updateGasStatusUI();
+      renderCustomers();
+    });
+
+    // 1. 讀取與儲存 LocalStorage
+    function loadFromLocalStorage() {
+      try {
+        const savedCustomers = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+        const savedCompanies = localStorage.getItem(STORAGE_KEYS.COMPANIES);
+
+        if (savedCustomers) {
+          customers = JSON.parse(savedCustomers);
+        }
+        if (savedCompanies) {
+          const parsedCompanies = JSON.parse(savedCompanies);
+          if (Array.isArray(parsedCompanies) && parsedCompanies.length > 0) {
+            companies = parsedCompanies;
+          }
+        }
+      } catch (e) {
+        console.error('讀取本機資料失敗:', e);
+        showToast('讀取本機資料發生異常，已重新初始化', 'error');
+      }
+    }
+
+    function saveToLocalStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+        localStorage.setItem(STORAGE_KEYS.COMPANIES, JSON.stringify(companies));
+      } catch (e) {
+        console.error('儲存本機資料失敗:', e);
+        showToast('瀏覽器儲存空間不足，請匯出備份！', 'error');
+      }
+    }
+
+    // 2. 產險公司下拉選單管理
+    function populateCompanyDropdowns() {
+      const formSelect = document.getElementById('fieldCompany');
+      const filterSelect = document.getElementById('companyFilter');
+      const currentFilterVal = filterSelect.value;
+      const currentFormVal = formSelect.value;
+
+      formSelect.innerHTML = companies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+      filterSelect.innerHTML = `<option value="ALL">所有產險公司</option>` +
+        companies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+      if (companies.includes(currentFormVal)) formSelect.value = currentFormVal;
+      if (companies.includes(currentFilterVal)) filterSelect.value = currentFilterVal;
+    }
+
+    function toggleCustomCompanyInput() {
+      const box = document.getElementById('customCompanyBox');
+      box.classList.toggle('hidden');
+      if (!box.classList.contains('hidden')) {
+        document.getElementById('newCompanyInput').focus();
+      }
+    }
+
+    function addCustomCompany() {
+      const input = document.getElementById('newCompanyInput');
+      const newName = input.value.trim();
+      if (!newName) {
+        showToast('請輸入產險公司名稱', 'warning');
+        return;
+      }
+      if (!companies.includes(newName)) {
+        companies.push(newName);
+        saveToLocalStorage();
+        populateCompanyDropdowns();
+      }
+      document.getElementById('fieldCompany').value = newName;
+      input.value = '';
+      document.getElementById('customCompanyBox').classList.add('hidden');
+      showToast(`已新增並選取「${newName}」`, 'success');
+    }
+
+    // 3. 日期計算與到期狀態判定
+    function getDaysRemaining(endDateStr) {
+      if (!endDateStr) return 9999;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const parts = endDateStr.split('-');
+      const endDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      endDate.setHours(0, 0, 0, 0);
+
+      const diffMs = endDate - today;
+      return Math.round(diffMs / (1000 * 60 * 60 * 24));
+    }
+
+    function getExpiryBadgeInfo(days) {
+      if (days < 0) {
+        return {
+          statusKey: 'EXPIRED',
+          label: `已過期 ${Math.abs(days)} 天`,
+          badgeClass: 'bg-red-100 text-red-700 border-red-200',
+          dotClass: 'bg-red-500',
+          rowBorderClass: 'border-l-4 border-l-red-500'
+        };
+      } else if (days === 0) {
+        return {
+          statusKey: 'URGENT30',
+          label: '今天到期！',
+          badgeClass: 'bg-red-100 text-red-700 border-red-200 font-bold',
+          dotClass: 'bg-red-500 animate-ping',
+          rowBorderClass: 'border-l-4 border-l-red-500'
+        };
+      } else if (days <= 30) {
+        return {
+          statusKey: 'URGENT30',
+          label: `剩 ${days} 天到期`,
+          badgeClass: 'bg-orange-100 text-orange-700 border-orange-200',
+          dotClass: 'bg-orange-500',
+          rowBorderClass: 'border-l-4 border-l-orange-500'
+        };
+      } else if (days <= 60) {
+        return {
+          statusKey: 'SOON60',
+          label: `剩 ${days} 天到期`,
+          badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+          dotClass: 'bg-amber-500',
+          rowBorderClass: 'border-l-4 border-l-amber-400'
+        };
+      } else {
+        return {
+          statusKey: 'SAFE',
+          label: `剩 ${days} 天 (正常)`,
+          badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          dotClass: 'bg-emerald-500',
+          rowBorderClass: 'border-l-4 border-l-emerald-500'
+        };
+      }
+    }
+
+    // 4. 渲染儀表板與客戶清單
+    function renderCustomers() {
+      const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+      const companyFilter = document.getElementById('companyFilter').value;
+      const statusFilter = document.getElementById('statusFilter').value;
+
+      // 顯示/隱藏清除搜尋按鈕
+      const clearBtn = document.getElementById('clearSearchBtn');
+      if (searchQuery) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+
+      // 計算全體統計數據
+      let countTotal = customers.length;
+      let countExpired = 0;
+      let countUrgent30 = 0;
+      let countSoon60 = 0;
+
+      const enrichedCustomers = customers.map(c => {
+        const days = getDaysRemaining(c.endDate);
+        const badge = getExpiryBadgeInfo(days);
+
+        if (days < 0) countExpired++;
+        else if (days <= 30) countUrgent30++;
+        else if (days <= 60) countSoon60++;
+
+        return { ...c, daysRemaining: days, badge };
+      });
+
+      // 更新統計卡片數字
+      document.getElementById('statTotal').textContent = countTotal;
+      document.getElementById('statExpired').textContent = countExpired;
+      document.getElementById('statUrgent30').textContent = countUrgent30;
+      document.getElementById('statSoon60').textContent = countSoon60;
+
+      // 篩選資料
+      let filtered = enrichedCustomers.filter(c => {
+        // 關鍵字比對 (姓名、車號、證號、電話、備註)
+        if (searchQuery) {
+          const haystack = `${c.name} ${c.plate} ${c.idNumber} ${c.phone || ''} ${c.notes || ''}`.toLowerCase();
+          if (!haystack.includes(searchQuery)) return false;
+        }
+        // 產險公司比對
+        if (companyFilter !== 'ALL' && c.company !== companyFilter) return false;
+        // 到期狀態比對
+        if (statusFilter !== 'ALL' && c.badge.statusKey !== statusFilter) return false;
+
+        return true;
+      });
+
+      // 依照到期日由近到遠排序 (剩餘天數少的排在最前面)
+      filtered.sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+      document.getElementById('filteredCount').textContent = filtered.length;
+
+      const emptyState = document.getElementById('emptyState');
+      const desktopContainer = document.getElementById('desktopTableContainer');
+      const mobileContainer = document.getElementById('mobileCardContainer');
+      const desktopBody = document.getElementById('desktopTableBody');
+
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        desktopContainer.classList.add('hidden');
+        mobileContainer.classList.add('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      desktopContainer.classList.remove('hidden');
+      mobileContainer.classList.remove('hidden');
+
+      // 渲染桌面版表格列
+      desktopBody.innerHTML = filtered.map(c => `
+        <tr class="hover:bg-blue-50/40 transition ${c.badge.rowBorderClass}">
+          <td class="py-3.5 px-4 whitespace-nowrap">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${c.badge.badgeClass}">
+              <span class="w-1.5 h-1.5 rounded-full ${c.badge.dotClass}"></span>
+              ${c.badge.label}
+            </span>
+          </td>
+          <td class="py-3.5 px-4">
+            <div class="font-bold text-slate-900">${escapeHtml(c.name)}</div>
+            <div class="text-xs text-slate-500 font-mono mt-0.5">${escapeHtml(c.idNumber)}</div>
+          </td>
+          <td class="py-3.5 px-4 whitespace-nowrap">
+            <span class="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 font-mono font-bold text-slate-800 text-xs tracking-wider">
+              ${escapeHtml(c.plate)}
+            </span>
+          </td>
+          <td class="py-3.5 px-4 whitespace-nowrap">
+            <span class="font-medium text-brand-700">${escapeHtml(c.company)}</span>
+          </td>
+          <td class="py-3.5 px-4 whitespace-nowrap text-xs">
+            <div class="text-slate-500">起：${escapeHtml(c.startDate)}</div>
+            <div class="font-bold text-slate-800 mt-0.5">迄：${escapeHtml(c.endDate)}</div>
+          </td>
+          <td class="py-3.5 px-4 max-w-xs">
+            ${c.phone ? `<div class="text-xs font-medium text-slate-700"><i class="fa-solid fa-phone text-slate-400 mr-1"></i>${escapeHtml(c.phone)}</div>` : ''}
+            ${c.notes ? `<div class="text-xs text-slate-500 truncate mt-0.5" title="${escapeHtml(c.notes)}">${escapeHtml(c.notes)}</div>` : '<span class="text-xs text-slate-300">-</span>'}
+          </td>
+          <td class="py-3.5 px-4 whitespace-nowrap text-right">
+            <div class="inline-flex items-center gap-1.5">
+              <button onclick="copyRenewalMessage('${c.id}')" title="一鍵複製 LINE 續保提醒文字" class="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold transition flex items-center gap-1">
+                <i class="fa-brands fa-line text-sm"></i>
+                <span>複製提醒</span>
+              </button>
+              <button onclick="confirmRenewOneYear('${c.id}')" title="一鍵續保 (起迄日自動延後一年)" class="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-brand-700 border border-blue-200 text-xs font-semibold transition flex items-center gap-1">
+                <i class="fa-solid fa-rotate"></i>
+                <span>續保+1年</span>
+              </button>
+              <button onclick="openCustomerModal('${c.id}')" title="編輯資料" class="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600 transition">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button onclick="confirmDeleteCustomer('${c.id}')" title="刪除資料" class="p-1.5 rounded-lg hover:bg-red-100 text-red-600 transition">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      // 渲染手機版卡片 (大按鈕設計)
+      mobileContainer.innerHTML = filtered.map(c => `
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 ${c.badge.rowBorderClass} space-y-3">
+          <!-- 卡片頂部：姓名、車牌與到期狀態標籤 -->
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base font-bold text-slate-900">${escapeHtml(c.name)}</h3>
+                <span class="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-300 font-mono font-bold text-slate-800 text-xs">
+                  ${escapeHtml(c.plate)}
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 font-mono mt-0.5">證號/統編：${escapeHtml(c.idNumber)}</p>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shrink-0 ${c.badge.badgeClass}">
+              <span class="w-1.5 h-1.5 rounded-full ${c.badge.dotClass}"></span>
+              ${c.badge.label}
+            </span>
+          </div>
+
+          <!-- 保險細節區塊 -->
+          <div class="bg-slate-50 rounded-xl p-3 text-xs space-y-1.5 border border-slate-100">
+            <div class="flex justify-between">
+              <span class="text-slate-500">承保公司：</span>
+              <span class="font-bold text-brand-700">${escapeHtml(c.company)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">保險期間：</span>
+              <span class="font-semibold text-slate-800">${escapeHtml(c.startDate)} ~ ${escapeHtml(c.endDate)}</span>
+            </div>
+            ${c.phone ? `
+            <div class="flex justify-between">
+              <span class="text-slate-500">聯絡電話：</span>
+              <a href="tel:${escapeHtml(c.phone)}" class="font-semibold text-brand-600 underline">${escapeHtml(c.phone)}</a>
+            </div>` : ''}
+            ${c.notes ? `
+            <div class="pt-1 border-t border-slate-200/70 text-slate-600">
+              <span class="text-slate-400">備註：</span>${escapeHtml(c.notes)}
+            </div>` : ''}
+          </div>
+
+          <!-- 手機端大尺寸操作按鈕群 -->
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button onclick="copyRenewalMessage('${c.id}')" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs">
+              <i class="fa-brands fa-line text-base"></i>
+              <span>複製 LINE 續保提醒</span>
+            </button>
+            <button onclick="confirmRenewOneYear('${c.id}')" class="py-2.5 px-3 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs">
+              <i class="fa-solid fa-rotate"></i>
+              <span>一鍵續保 (+1年)</span>
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="openCustomerModal('${c.id}')" class="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-pen-to-square"></i>
+              <span>編輯資料</span>
+            </button>
+            <button onclick="confirmDeleteCustomer('${c.id}')" class="py-2 px-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-trash-can"></i>
+              <span>刪除</span>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 5. 篩選器互動控制
+    function setStatusFilter(status) {
+      document.getElementById('statusFilter').value = status;
+      syncCardHighlight();
+      renderCustomers();
+    }
+
+    function syncCardHighlight() {
+      const current = document.getElementById('statusFilter').value;
+      document.querySelectorAll('.stat-card').forEach(card => {
+        card.classList.remove('border-brand-500', 'border-red-500', 'border-orange-500', 'border-amber-500', 'bg-blue-50/30');
+        card.classList.add('border-transparent');
+      });
+
+      const activeCard = document.getElementById(`card-${current}`);
+      if (activeCard) {
+        activeCard.classList.remove('border-transparent');
+        if (current === 'ALL') activeCard.classList.add('border-brand-500');
+        if (current === 'EXPIRED') activeCard.classList.add('border-red-500');
+        if (current === 'URGENT30') activeCard.classList.add('border-orange-500');
+        if (current === 'SOON60') activeCard.classList.add('border-amber-500');
+      }
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      renderCustomers();
+    }
+
+    function resetFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('companyFilter').value = 'ALL';
+      document.getElementById('statusFilter').value = 'ALL';
+      syncCardHighlight();
+      renderCustomers();
+    }
+
+    // 6. 新增 / 編輯客戶視窗與表單處理
+    function openCustomerModal(id = null) {
+      const modal = document.getElementById('customerModal');
+      const form = document.getElementById('customerForm');
+      form.reset();
+      document.getElementById('customCompanyBox').classList.add('hidden');
+      populateCompanyDropdowns();
+
+      if (id) {
+        const customer = customers.find(c => c.id === id);
+        if (!customer) return;
+
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square"></i><span>編輯客戶保單資料</span>`;
+        document.getElementById('customerId').value = customer.id;
+        document.getElementById('fieldName').value = customer.name;
+        document.getElementById('fieldIdNumber').value = customer.idNumber;
+        document.getElementById('fieldPlate').value = customer.plate;
+        document.getElementById('fieldPhone').value = customer.phone || '';
+
+        if (!companies.includes(customer.company)) {
+          companies.push(customer.company);
+          populateCompanyDropdowns();
+        }
+        document.getElementById('fieldCompany').value = customer.company;
+        document.getElementById('fieldStartDate').value = customer.startDate;
+        document.getElementById('fieldEndDate').value = customer.endDate;
+        document.getElementById('fieldNotes').value = customer.notes || '';
+      } else {
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-user-plus"></i><span>新增客戶保單資料</span>`;
+        document.getElementById('customerId').value = '';
+        // 預設帶入今天為起始日，一年後為到期日
+        const todayStr = formatDateISO(new Date());
+        document.getElementById('fieldStartDate').value = todayStr;
+        setOneYearFromStart();
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeCustomerModal() {
+      const modal = document.getElementById('customerModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function autoSetEndDate() {
+      const endInput = document.getElementById('fieldEndDate');
+      if (!endInput.value) {
+        setOneYearFromStart();
+      }
+    }
+
+    function setOneYearFromStart() {
+      const startVal = document.getElementById('fieldStartDate').value;
+      if (!startVal) return;
+      document.getElementById('fieldEndDate').value = addOneYearToDateStr(startVal);
+    }
+
+    function addOneYearToDateStr(dateStr) {
+      const parts = dateStr.split('-');
+      const d = new Date(Number(parts[0]) + 1, Number(parts[1]) - 1, Number(parts[2]));
+      return formatDateISO(d);
+    }
+
+    function formatDateISO(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function saveCustomer(event) {
+      event.preventDefault();
+
+      const id = document.getElementById('customerId').value;
+      const name = document.getElementById('fieldName').value.trim();
+      const idNumber = document.getElementById('fieldIdNumber').value.trim().toUpperCase();
+      const plate = document.getElementById('fieldPlate').value.trim().toUpperCase();
+      const phone = document.getElementById('fieldPhone').value.trim();
+      const company = document.getElementById('fieldCompany').value;
+      const startDate = document.getElementById('fieldStartDate').value;
+      const endDate = document.getElementById('fieldEndDate').value;
+      const notes = document.getElementById('fieldNotes').value.trim();
+
+      if (endDate < startDate) {
+        showToast('保險到期日不可早於保險起始日！', 'error');
+        return;
+      }
+
+      if (id) {
+        // 更新既有客戶
+        const idx = customers.findIndex(c => c.id === id);
+        if (idx !== -1) {
+          customers[idx] = { ...customers[idx], name, idNumber, plate, phone, company, startDate, endDate, notes, updatedAt: new Date().toISOString() };
+          showToast(`已更新「${name}」的保單資料`, 'success');
+        }
+      } else {
+        // 新增客戶
+        const newCustomer = {
+          id: 'cust_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          name,
+          idNumber,
+          plate,
+          phone,
+          company,
+          startDate,
+          endDate,
+          notes,
+          createdAt: new Date().toISOString()
+        };
+        customers.push(newCustomer);
+        showToast(`已成功新增客戶「${name}」`, 'success');
+      }
+
+      saveToLocalStorage();
+      closeCustomerModal();
+      renderCustomers();
+    }
+
+    // 7. 一鍵複製 LINE 續保提醒文字
+    function copyRenewalMessage(id) {
+      const c = customers.find(item => item.id === id);
+      if (!c) return;
+
+      const days = getDaysRemaining(c.endDate);
+      const statusNote = days < 0
+        ? `已於 ${c.endDate} 到期`
+        : `將於 ${c.endDate} 到期（剩餘 ${days} 天）`;
+
+      const message = `【產險到期續保提醒】\n${c.name} 您好：\n提醒您，您的愛車（車號：${c.plate}）投保於「${c.company}」的保險${statusNote}。\n為確保您的行車保障不中斷，如需為您規劃續保報價或調整保障內容，歡迎隨時回覆與我聯繫，謝謝您！`;
+
+      copyTextToClipboard(message, `已複製「${c.name}」的 LINE 續保提醒文字！`);
+    }
+
+    // 8. 一鍵續保 (起迄日自動往後延一年)
+    function confirmRenewOneYear(id) {
+      const c = customers.find(item => item.id === id);
+      if (!c) return;
+
+      const newStart = c.endDate; // 新保單起始日通常接續原到期日
+      const newEnd = addOneYearToDateStr(c.endDate);
+
+      openConfirmModal(
+        '確認一鍵續保 (+1年)',
+        `確定要將「${c.name} (${c.plate})」的保險期間更新為 ${newStart} ~ ${newEnd} 嗎？`,
+        () => {
+          c.startDate = newStart;
+          c.endDate = newEnd;
+          c.updatedAt = new Date().toISOString();
+          saveToLocalStorage();
+          renderCustomers();
+          showToast(`已完成「${c.name}」續保更新！新到期日：${newEnd}`, 'success');
+        }
+      );
+    }
+
+    // 9. 刪除客戶確認
+    function confirmDeleteCustomer(id) {
+      const c = customers.find(item => item.id === id);
+      if (!c) return;
+
+      openConfirmModal(
+        '刪除客戶資料',
+        `確定要刪除「${c.name} (${c.plate})」的保單紀錄嗎？此動作無法復原。`,
+        () => {
+          customers = customers.filter(item => item.id !== id);
+          saveToLocalStorage();
+          renderCustomers();
+          showToast(`已刪除「${c.name}」的資料`, 'info');
+        },
+        true
+      );
+    }
+
+    // 10. Google 雲端同步 (GAS) 與檔案備份還原
+    function openCloudModal() {
+      const savedUrl = localStorage.getItem(STORAGE_KEYS.GAS_URL) || '';
+      document.getElementById('gasUrlInput').value = savedUrl;
+      updateGasStatusUI();
+
+      const modal = document.getElementById('cloudModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeCloudModal() {
+      const modal = document.getElementById('cloudModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function switchCloudTab(tab) {
+      const btnGas = document.getElementById('tabBtnGas');
+      const btnFile = document.getElementById('tabBtnFile');
+      const contentGas = document.getElementById('tabContentGas');
+      const contentFile = document.getElementById('tabContentFile');
+
+      if (tab === 'gas') {
+        btnGas.className = 'px-4 py-2.5 rounded-t-xl text-sm font-bold bg-white text-brand-700 border-t border-x border-slate-200 -mb-px';
+        btnFile.className = 'px-4 py-2.5 rounded-t-xl text-sm font-medium text-slate-600 hover:text-slate-900';
+        contentGas.classList.remove('hidden');
+        contentFile.classList.add('hidden');
+      } else {
+        btnFile.className = 'px-4 py-2.5 rounded-t-xl text-sm font-bold bg-white text-brand-700 border-t border-x border-slate-200 -mb-px';
+        btnGas.className = 'px-4 py-2.5 rounded-t-xl text-sm font-medium text-slate-600 hover:text-slate-900';
+        contentFile.classList.remove('hidden');
+        contentGas.classList.add('hidden');
+      }
+    }
+
+    function saveGasUrl() {
+      const url = document.getElementById('gasUrlInput').value.trim();
+      if (url && !url.startsWith('https://script.google.com/')) {
+        showToast('網址格式似乎不正確，應以 https://script.google.com/ 開頭', 'warning');
+        return;
+      }
+      localStorage.setItem(STORAGE_KEYS.GAS_URL, url);
+      updateGasStatusUI();
+      showToast(url ? '已儲存 Google Apps Script 同步網址！' : '已清除同步網址', 'success');
+    }
+
+    function updateGasStatusUI() {
+      const url = localStorage.getItem(STORAGE_KEYS.GAS_URL);
+      const lastSync = localStorage.getItem(STORAGE_KEYS.LAST_SYNC);
+      const dot = document.getElementById('cloudStatusDot');
+      const statusText = document.getElementById('gasSyncStatusText');
+      const lastSyncHeader = document.getElementById('lastSyncInfo');
+
+      if (url) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+        dot.title = '已連結 Google Apps Script';
+        statusText.textContent = lastSync ? `已連結雲端・上次同步時間：${lastSync}` : '已連結雲端網址，可隨時進行雙向同步';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        dot.title = '尚未設定 Google Apps Script URL';
+        statusText.textContent = '尚未設定網址，請依照下方步驟部署後貼上網址';
+      }
+
+      if (lastSync) {
+        lastSyncHeader.textContent = `・雲端同步：${lastSync}`;
+      }
+    }
+
+    function copyGasScript() {
+      const code = document.getElementById('gasCodeBlock').innerText;
+      copyTextToClipboard(code, '已複製 Google Apps Script 程式碼！');
+    }
+
+    // 上傳同步至 Google Apps Script
+    async function syncUploadToGoogle() {
+      const url = localStorage.getItem(STORAGE_KEYS.GAS_URL);
+      if (!url) {
+        showToast('請先輸入並儲存 Google Apps Script 網頁應用程式網址！', 'warning');
+        return;
+      }
+
+      const btn = document.getElementById('btnUploadGas');
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>正在上傳至 Google 雲端...</span>`;
+
+      try {
+        const payload = JSON.stringify({
+          customers: customers,
+          companies: companies,
+          exportedAt: new Date().toISOString()
+        });
+
+        // 使用 text/plain 避免觸發瀏覽器複雜 CORS Preflight (OPTIONS)
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: payload
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+          const nowStr = new Date().toLocaleString('zh-TW');
+          localStorage.setItem(STORAGE_KEYS.LAST_SYNC, nowStr);
+          updateGasStatusUI();
+          showToast(`成功上傳 ${customers.length} 筆客戶資料至 Google 試算表！`, 'success');
+        } else {
+          throw new Error(result.message || '雲端回傳錯誤');
+        }
+      } catch (err) {
+        console.error('GAS 上傳錯誤:', err);
+        showToast('上傳失敗！請確認 GAS 部署權限是否設為「所有人」', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+    }
+
+    // 從 Google Apps Script 下載還原
+    async function syncDownloadFromGoogle() {
+      const url = localStorage.getItem(STORAGE_KEYS.GAS_URL);
+      if (!url) {
+        showToast('請先輸入並儲存 Google Apps Script 網頁應用程式網址！', 'warning');
+        return;
+      }
+
+      openConfirmModal(
+        '從 Google 雲端下載還原',
+        '此操作將會使用 Google 雲端試算表中的資料覆蓋目前本機的客戶清單，確定要繼續嗎？',
+        async () => {
+          const btn = document.getElementById('btnDownloadGas');
+          const originalHtml = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>正在從雲端下載...</span>`;
+
+          try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data && Array.isArray(data.customers)) {
+              customers = data.customers;
+              if (Array.isArray(data.companies) && data.companies.length > 0) {
+                companies = data.companies;
+              }
+              saveToLocalStorage();
+              populateCompanyDropdowns();
+              renderCustomers();
+
+              const nowStr = new Date().toLocaleString('zh-TW');
+              localStorage.setItem(STORAGE_KEYS.LAST_SYNC, nowStr);
+              updateGasStatusUI();
+              showToast(`已成功從 Google 雲端還原 ${customers.length} 筆客戶資料！`, 'success');
+            } else {
+              throw new Error('雲端資料格式不符或尚無備份資料');
+            }
+          } catch (err) {
+            console.error('GAS 下載錯誤:', err);
+            showToast('下載還原失敗！請確認網址正確且雲端已有上傳過資料', 'error');
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+          }
+        }
+      );
+    }
+
+    // 匯出 Excel 相容 CSV (含 UTF-8 BOM)
+    function exportCSV() {
+      if (customers.length === 0) {
+        showToast('目前沒有客戶資料可匯出', 'warning');
+        return;
+      }
+
+      const headers = ['客戶姓名', '身分證字號/統編', '車牌號碼', '產險公司', '保險起始日', '保險到期日', '聯絡電話', '備註'];
+      const rows = customers.map(c => [
+        c.name,
+        c.idNumber,
+        c.plate,
+        c.company,
+        c.startDate,
+        c.endDate,
+        c.phone || '',
+        c.notes || ''
+      ]);
+
+      const csvContent = [headers, ...rows]
+        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\r\n');
+
+      // 加入 \uFEFF UTF-8 BOM 確保 Excel 開啟中文不亂碼
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const dateTag = formatDateISO(new Date()).replace(/-/g, '');
+      downloadBlob(blob, `產險客戶清單_${dateTag}.csv`);
+      showToast('已下載 Excel CSV 檔案！', 'success');
+    }
+
+    // 匯出 JSON 完整備份
+    function exportJSON() {
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        companies,
+        customers
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const dateTag = formatDateISO(new Date()).replace(/-/g, '');
+      downloadBlob(blob, `產險客戶完整備份_${dateTag}.json`);
+      showToast('已下載 JSON 完整備份檔！', 'success');
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 匯入 JSON 或 CSV 檔案
+    function handleFileImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const content = e.target.result;
+          if (file.name.toLowerCase().endsWith('.json')) {
+            const parsed = JSON.parse(content);
+            if (!parsed.customers || !Array.isArray(parsed.customers)) {
+              throw new Error('無效的 JSON 備份格式');
+            }
+            customers = parsed.customers;
+            if (Array.isArray(parsed.companies)) {
+              companies = Array.from(new Set([...DEFAULT_COMPANIES, ...parsed.companies]));
+            }
+            saveToLocalStorage();
+            populateCompanyDropdowns();
+            renderCustomers();
+            closeCloudModal();
+            showToast(`成功匯入 ${customers.length} 筆客戶資料！`, 'success');
+          } else if (file.name.toLowerCase().endsWith('.csv')) {
+            importFromCSVText(content);
+          } else {
+            showToast('僅支援 .json 或 .csv 檔案格式', 'error');
+          }
+        } catch (err) {
+          console.error('匯入檔案失敗:', err);
+          showToast('匯入失敗：檔案格式錯誤或損毀', 'error');
+        } finally {
+          event.target.value = '';
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    function importFromCSVText(csvText) {
+      const lines = csvText.replace(/^\uFEFF/, '').split(/\r?\n/).filter(line => line.trim() !== '');
+      if (lines.length < 2) {
+        showToast('CSV 檔案中沒有資料列', 'warning');
+        return;
+      }
+
+      const imported = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i]);
+        if (cols.length >= 6 && cols[0] && cols[5]) {
+          const comp = cols[3] || '富邦產險';
+          if (!companies.includes(comp)) companies.push(comp);
+          imported.push({
+            id: 'cust_' + Date.now() + '_' + i,
+            name: cols[0],
+            idNumber: (cols[1] || '').toUpperCase(),
+            plate: (cols[2] || '').toUpperCase(),
+            company: comp,
+            startDate: cols[4] || formatDateISO(new Date()),
+            endDate: cols[5],
+            phone: cols[6] || '',
+            notes: cols[7] || ''
+          });
+        }
+      }
+
+      if (imported.length === 0) {
+        showToast('無法從 CSV 解析出有效的客戶資料', 'error');
+        return;
+      }
+
+      customers = [...customers, ...imported];
+      saveToLocalStorage();
+      populateCompanyDropdowns();
+      renderCustomers();
+      closeCloudModal();
+      showToast(`成功從 CSV 匯入新增 ${imported.length} 筆客戶資料！`, 'success');
+    }
+
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    // 11. 載入測試範例資料 (方便首次體驗)
+    function loadDemoData() {
+      const today = new Date();
+      const addDays = (offset) => {
+        const d = new Date(today);
+        d.setDate(d.getDate() + offset);
+        return formatDateISO(d);
+      };
+      const minusOneYearPlusDays = (offset) => {
+        const d = new Date(today);
+        d.setFullYear(d.getFullYear() - 1);
+        d.setDate(d.getDate() + offset);
+        return formatDateISO(d);
+      };
+
+      const demos = [
+        {
+          id: 'demo_1',
+          name: '陳志豪',
+          idNumber: 'A123456789',
+          plate: 'BFA-8899',
+          company: '富邦產險',
+          startDate: minusOneYearPlusDays(-5),
+          endDate: addDays(-5),
+          phone: '0912-345-678',
+          notes: '強制險 + 第三人責任險，客戶習慣下午聯繫'
+        },
+        {
+          id: 'demo_2',
+          name: '林雅婷',
+          idNumber: 'F223987654',
+          plate: 'ABC-5678',
+          company: '國泰產險',
+          startDate: minusOneYearPlusDays(12),
+          endDate: addDays(12),
+          phone: '0928-111-222',
+          notes: '乙式車體險 + 超額 1000萬，Toyota RAV4'
+        },
+        {
+          id: 'demo_3',
+          name: '宏達精密工業有限公司',
+          idNumber: '24567890',
+          plate: 'RAA-1029',
+          company: '新安東京海上',
+          startDate: minusOneYearPlusDays(25),
+          endDate: addDays(25),
+          phone: '03-3668899',
+          notes: '公司公務車，需開立三聯式發票與收據'
+        },
+        {
+          id: 'demo_4',
+          name: '張家銘',
+          idNumber: 'H124567890',
+          plate: 'KLA-3321',
+          company: '和泰產險',
+          startDate: minusOneYearPlusDays(48),
+          endDate: addDays(48),
+          phone: '0933-777-888',
+          notes: '丙式車體 + 道路救援 50公里'
+        },
+        {
+          id: 'demo_5',
+          name: '黃淑芬',
+          idNumber: 'B221456987',
+          plate: 'MNB-7766',
+          company: '明台產險',
+          startDate: minusOneYearPlusDays(180),
+          endDate: addDays(180),
+          phone: '0955-444-333',
+          notes: '強制險兩年期'
+        }
+      ];
+
+      customers = [...customers, ...demos];
+      saveToLocalStorage();
+      renderCustomers();
+      showToast('已載入 5 筆測試客戶資料，可體驗到期排序與一鍵提醒！', 'success');
+    }
+
+    // 12. 通用輔助函式 (剪貼簿、確認視窗、Toast 通知、XSS 防護)
+    function copyTextToClipboard(text, successMsg) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast(successMsg, 'success');
+      } catch (err) {
+        showToast('複製失敗，請手動選取文字複製', 'error');
+      }
+      document.body.removeChild(textarea);
+    }
+
+    function openConfirmModal(title, message, onConfirm, isDanger = false) {
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmMessage').textContent = message;
+      currentConfirmCallback = onConfirm;
+
+      const btn = document.getElementById('confirmActionBtn');
+      const iconBox = document.getElementById('confirmIconBox');
+
+      if (isDanger) {
+        btn.className = 'px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-xs';
+        iconBox.className = 'w-11 h-11 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xl shrink-0';
+      } else {
+        btn.className = 'px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-xs';
+        iconBox.className = 'w-11 h-11 rounded-full bg-blue-100 text-brand-600 flex items-center justify-center text-xl shrink-0';
+      }
+
+      btn.onclick = () => {
+        closeConfirmModal();
+        if (typeof currentConfirmCallback === 'function') {
+          currentConfirmCallback();
+        }
+      };
+
+      const modal = document.getElementById('confirmModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeConfirmModal() {
+      const modal = document.getElementById('confirmModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+
+      const styles = {
+        success: 'bg-slate-900 text-white border-l-4 border-emerald-400',
+        error: 'bg-red-900 text-white border-l-4 border-red-400',
+        warning: 'bg-amber-900 text-white border-l-4 border-amber-400',
+        info: 'bg-slate-800 text-white border-l-4 border-blue-400'
+      };
+
+      const icons = {
+        success: 'fa-circle-check text-emerald-400',
+        error: 'fa-circle-xmark text-red-400',
+        warning: 'fa-triangle-exclamation text-amber-400',
+        info: 'fa-circle-info text-blue-400'
+      };
+
+      toast.className = `${styles[type] || styles.info} px-4 py-3 rounded-xl shadow-xl text-sm font-medium flex items-center gap-3 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0`;
+      toast.innerHTML = `
+        <i class="fa-solid ${icons[type] || icons.info} text-base shrink-0"></i>
+        <span class="flex-1 leading-snug">${escapeHtml(message)}</span>
+      `;
+
+      container.appendChild(toast);
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
